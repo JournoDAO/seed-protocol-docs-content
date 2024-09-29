@@ -1,0 +1,17 @@
+# .github/workflows/trigger-vercel-build.yml
+name: Trigger Docs Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  trigger-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel Deploy Hook
+        run: |
+          curl -X POST "{VERCEL_DEPLOY_HOOK_URL}"
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
