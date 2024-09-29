@@ -1,4 +1,5 @@
-name: Trigger Docs Build
+name: trigger-docs-build
+run-name: Trigger Docs Build
 
 on:
   push:
@@ -8,9 +9,9 @@ on:
 jobs:
   trigger-build:
     runs-on: ubuntu-latest
+    env:
+      VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
     steps:
       - name: Trigger Vercel Deploy Hook
         run: |
-          curl -X POST "{VERCEL_DEPLOY_HOOK_URL}"
-        env:
-          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+          curl -X POST "$VERCEL_DEPLOY_HOOK_URL"
