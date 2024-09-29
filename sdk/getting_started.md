@@ -1,4 +1,12 @@
+---
+layout: page
+slug: /sdk/getting-started
+title: "Getting started"
+---
+
 # Getting Started
+
+## Define Your Data Model
 
 The first thing to do when integrating Seed SDK is define your data model.
 
@@ -57,17 +65,20 @@ This will create a database locally in the browser with all the tables and field
 
 Notice that we create relationships by defining a `Property` that takes its related Model as its type. For one-to-many relationships, we use the `List` type and pass in the `Model` type we want.
 
-So creating a Post would look like this:
+## Creating Items
+
+An `Item` is a wrapper class for an instance of a `Model`. Creating items currently looks like this:
 
 ```typescript=
-import {Post, Image, Identity} from './seed/models'
+import {Item,} from '@seedprotocol/sdk'
+import {Post, Image, Identity} from './models'
 import html from './index.html'
 
-const image = await Image.create({
+const image = new Item<Image>({
     src: 'https://imgr.com/image.jpg',
 })
 
-const author = await Identity.create({
+const author = new Item<Identity>({
     name: 'Keith Axline',
     profile: 'Developer for Seed Protocol',
 })
@@ -76,7 +87,7 @@ const authors = [
     author
 ]
 
-const post = await Post.create({
+const post = new Item<Post>({
     title: 'Some title',
     summary: 'My summary',
     featureImage: image,
@@ -91,3 +102,5 @@ post.title = 'Something else'
 await post.publish()
 
 ```
+
+Your feedback on how to make this API simpler, cleaner, or more intuitive is very welcome. Please open an issue or PR if you have any suggestions.
