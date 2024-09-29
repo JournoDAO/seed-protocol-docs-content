@@ -1,4 +1,3 @@
-# .github/workflows/trigger-vercel-build.yml
 name: Trigger Docs Build
 
 on:
