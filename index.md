@@ -1,3 +1,7 @@
+---
+title: Seed Protocol Docs
+slug: /about
+---
 # Seed Protocol Docs Content
 
 These are the raw markdown files that are used to generate the Seed Protocol documentation. 

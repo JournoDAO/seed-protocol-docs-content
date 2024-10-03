@@ -1,0 +1,3 @@
+# About Seed Protocol
+
+Seed Protocol is an open-source, distributed protocol for publishing and indexing content. As more and more of our collective well-being depends on access to information, the need for well-preserved and accessible information becomes more pronounced. Centralized means of data storage has proven unreliable as digital public infrastructure, but luckily there are more secure solutions available.
