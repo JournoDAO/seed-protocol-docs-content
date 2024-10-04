@@ -12,7 +12,7 @@ The unique value prop for Seed Protocol has three main components:
 - [Permanence](#permanence)
 - [Discoverability](#discoverability)
 
-## Network effects for the people 2
+## Network effects for the people
 
 The path to network effects thus far has relied on heavy capital investments -- investments that require extractive
 monopolies to make the risk and resources worthwhile. As permissionless peer-to-peer networks like Ethereum mature, we 
