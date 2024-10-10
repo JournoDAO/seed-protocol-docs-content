@@ -1,0 +1,3 @@
+# Resource Description Framework (RDF)
+
+[Resource Description Framework (RDF)](https://www.w3.org/RDF/) is a standard model for data interoperability on the web. It provides a way to describe and exchange information in a structured format that can be understood by different systems. RDF is widely used in the Semantic Web and other web-based applications to enable data integration and interoperability.
