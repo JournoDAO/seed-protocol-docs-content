@@ -1,6 +1,6 @@
 ---
 title: Design Principles
-version: 0.0.2
+version: 0.0.3
 ---
 
 # Design Principles
