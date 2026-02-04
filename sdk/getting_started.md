@@ -6,195 +6,554 @@ title: "Getting started"
 
 # Getting Started
 
+This guide walks you through the core workflows: creating a schema with models, creating items from those models, and updating item properties.
+
+## Install
+
+```bash
+# npm
+npm install @seedprotocol/sdk
+
+# yarn
+yarn add @seedprotocol/sdk
+
+# bun
+bun add @seedprotocol/sdk
+```
+
 ## Prerequisites
 
-The Seed Protocol SDK depends on the following packages:
-
-- `better-sqlite3` - SQLite database driver
-
-Install the prerequisites:
-
-```bash
-npm install better-sqlite3
-```
-
-Or using yarn:
-
-```bash
-yarn add better-sqlite3
-```
-
-## Installation
-
-Install the Seed Protocol SDK using npm:
-
-```bash
-npm install @seedprotocol/sdk
-```
-
-Or using yarn:
-
-```bash
-yarn add @seedprotocol/sdk
-```
-
-## Create Your Schema File
-
-Create a file called `seed.config.ts` in your project root. This is where you'll define your data models.
-
-## Configure TypeScript
-
-Before defining your data model, you'll need to enable decorator support in your TypeScript configuration. Add these properties to your `tsconfig.json`:
-
-```json
-{
-  "compilerOptions": {
-    ...
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
-    ...
-  }
-}
-```
-
-## Define Your Data Model
-
-The first thing to do when integrating Seed SDK is define your data model. In your `seed.config.ts` file, you'll define your `Models`, their `Properties`, and what type of data each `Property` is expecting.
-
-For example, let's pretend we're creating a blog that uses Seed Protocol as its content store. Here's what your `seed.config.ts` file would look like:
-
-```typescript
-import { Model, Text, ImageSrc, Relation, List, } from '@seedprotocol/sdk'
-
-const endpoints = {
-  filePaths : '/api/seed/migrations',
-  files     : '/app-files',
-}
-
-@Model
-class Image {
-  @Text() storageTransactionId!: string
-  @Text() uri!: string
-  @Text() alt!: string
-  @ImageSrc() src!: string
-}
-
-@Model
-class Post {
-  @Text() title!: string
-  @Text() summary!: string
-  @Relation('Image',) featureImage!: string
-  @Text() html!: string
-  @Text() json!: string
-  @List('Identity',) authors!: string[]
-}
-
-@Model
-class Identity {
-  @Text() name!: string
-  @Text() bio!: string
-  @Relation('Image',) avatarImage!: string
-}
-
-@Model
-class Link {
-  @Text() url!: string
-  @Text() text!: string
-}
-
-const models = {
-  Identity,
-  Image,
-  Link,
-  Post,
-}
-
-export { endpoints, models, }
-```
-
-This will create a database locally in the browser with all the tables and fields necessary to support your Models. Feel free to check it out for yourself in your browser's Dev Tools.
-
-Notice that we create relationships by defining a `Property` that takes its related Model as its type. For one-to-many relationships, we use the `List` type and pass in the `Model` type we want.
-
-## Initialize the SDK Client
-
-Now that you have your data model defined, you can initialize the Seed Protocol SDK client in your application. Import the client and your configuration file:
+- Initialize the SDK client before using Schema, Model, or Item APIs. Pass your config (endpoints, `filesDir`, optional `dbConfig`) to `client.init()`. See [CONFIG_EXAMPLE.md](../CONFIG_EXAMPLE.md) for configuration details.
 
 ```typescript
 import { client } from '@seedprotocol/sdk'
-import config from './seed.config'
+
+await client.init({
+  config: {
+    endpoints: { /* your EAS endpoint */ },
+    filesDir: '.seed',
+  },
+  addresses: ['0x...'], // optional
+})
 ```
 
-Initialize the client by passing your configuration:
+---
+
+## 1. Create a schema with models
+
+A **schema** is a named container for **models**. Each model defines a set of **properties** (name and data type).
+
+### Create behavior (wait for ready)
+
+Schema, Model, ModelProperty, Item, and ItemProperty each run a small state machine. Their **`create()`** methods share the same behavior:
+
+- **Default:** `create()` returns a **Promise** that resolves when the entity is **ready** (state machine in the idle state). You should **`await`** the result before using the entity.
+- **Opt-out:** Pass **`{ waitForReady: false }`** as the last argument to get the entity **immediately** (synchronous return). Use this when you manage readiness yourself (e.g. internal loops that call `waitForEntityIdle` later) or when you only need a reference.
+- **Timeout:** When waiting, you can pass **`readyTimeout`** (milliseconds; default `5000`) in the same options object, e.g. `{ readyTimeout: 10000 }`.
+
+So in normal app code you’ll write:
+
+- `await Schema.create('Blog')`
+- `await Model.create('Post', schema, { properties })`
+- `await Item.create({ modelName: 'Post', schemaName: 'Blog', ... })`
+
+and use the returned instance after the promise resolves. Use `{ waitForReady: false }` only when you explicitly want the instance without waiting.
+
+1. Create the schema by name: `await Schema.create('Blog')`.
+2. Add models with `await Model.create(modelName, schema, { properties })`. Property definitions use `dataType` (e.g. `'Text'`, `'Number'`, `'Boolean'`, `'Date'`, `'Json'`, `'Html'`, `'Image'`, `'File'`, `'List'`, `'Relation'`).
+
+**Example: schema with a single model**
 
 ```typescript
-client.onReady(() => {
-  console.log('Seed Protocol client is ready')
+import { Schema, Model } from '@seedprotocol/sdk'
+
+// Create a schema. Default: waits until ready.
+const schema = await Schema.create('Blog')
+
+// Add a model with properties. Default: waits until ready.
+const Post = await Model.create('Post', schema, {
+  properties: {
+    title: { dataType: 'Text' },
+    content: { dataType: 'Text' },
+    published: { dataType: 'Boolean' },
+    wordCount: { dataType: 'Number' },
+  },
 })
 
-client.init({ config })
 ```
 
-The `onReady` callback will be triggered once the client has finished initializing and is ready to use. You can also check if the client is initialized using the `.isInitialized()` method:
+**Example: schema with multiple models**
 
 ```typescript
-if (client.isInitialized()) {
-  console.log('Client is ready to use')
-} else {
-  console.log('Client is still initializing...')
+import { Schema, Model } from '@seedprotocol/sdk'
+
+const schema = await Schema.create('MyApp')
+
+const Article = await Model.create('Article', schema, {
+  properties: {
+    headline: { dataType: 'Text' },
+    body: { dataType: 'Html' },
+    publishedAt: { dataType: 'Date' },
+  },
+})
+
+const Author = await Model.create('Author', schema, {
+  properties: {
+    name: { dataType: 'Text' },
+    bio: { dataType: 'Text' },
+  },
+})
+```
+
+You can also create a model by schema name (string) instead of a schema instance. The schema will be resolved by name:
+
+```typescript
+const Post = await Model.create('Post', 'Blog', {
+  properties: {
+    title: { dataType: 'Text' },
+    content: { dataType: 'Text' },
+  },
+})
+```
+
+---
+
+## 2. Create an item from a model
+
+Once a model exists, create **items** (data records) from it. Each item has a value for each model property. **`Item.create()`** and a model’s **`create()`** (e.g. `Post.create()`) also wait for the item to be ready by default; you can pass **`{ waitForReady: false }`** or **`readyTimeout`** as a second argument to `Item.create()`.
+
+**Using the model’s `create` method (recommended)**
+
+```typescript
+import { Schema, Model } from '@seedprotocol/sdk'
+
+const schema = await Schema.create('Blog')
+const Post = await Model.create('Post', schema, {
+  properties: {
+    title: { dataType: 'Text' },
+    content: { dataType: 'Text' },
+  },
+})
+
+const item = await Post.create({
+  title: 'My first post',
+  content: 'Hello, world!',
+})
+
+console.log(item.seedLocalId)  // item's local id
+console.log(item.title)        // 'My first post'
+console.log(item.content)      // 'Hello, world!'
+```
+
+**Using `Item.create` directly**
+
+You can create an item by passing `modelName` (and optional `schemaName`) plus property values:
+
+```typescript
+import { Item } from '@seedprotocol/sdk'
+
+const item = await Item.create({
+  modelName: 'Post',
+  schemaName: 'Blog',  // optional if you have a single schema
+  title: 'Another post',
+  content: 'Some content here.',
+})
+```
+
+---
+
+## 3. Update properties on an item
+
+Item properties are updated by **assigning to the property on the item**. The SDK syncs these changes to the database.
+
+```typescript
+// Create an item
+const item = await Post.create({
+  title: 'Draft post',
+  content: 'Initial content.',
+})
+
+// Update by assignment
+item.title = 'Updated title'
+item.content = 'Revised content.'
+
+// Read back
+console.log(item.title)   // 'Updated title'
+console.log(item.content) // 'Revised content.'
+```
+
+You can also read and update via the `properties` array (each element has `propertyName` and `value`):
+
+```typescript
+// Find a property and update its value
+const titleProp = item.properties.find((p) => p.propertyName === 'title')
+if (titleProp) {
+  titleProp.value = 'New title'
+}
+console.log(item.title) // 'New title'
+```
+
+---
+
+## Full example
+
+```typescript
+import { client, Schema, Model } from '@seedprotocol/sdk'
+
+async function main() {
+  await client.init({
+    config: {
+      endpoints: { /* your EAS endpoint */ },
+      filesDir: '.seed',
+    },
+  })
+
+  const schema = await Schema.create('Blog')
+  const Post = await Model.create('Post', schema, {
+    properties: {
+      title: { dataType: 'Text' },
+      content: { dataType: 'Text' },
+    },
+  })
+
+  const item = await Post.create({
+    title: 'First post',
+    content: 'Hello!',
+  })
+
+  item.title = 'First post (updated)'
+  item.content = 'Hello, world!'
+
+  console.log(item.seedLocalId, item.title, item.content)
 }
 ```
 
-You can also add error handling:
+---
+
+## React hooks (browser)
+
+In a React app you can use hooks for schemas, models, items, and item properties. These are exported from the main package:
+
+- `useSchema`, `useSchemas`, `useCreateSchema`, `useDestroySchema`
+- `useModel`, `useModels`, `useCreateModel`, `useDestroyModel`
+- `useItem`, `useItems`, `useCreateItem`, `useDeleteItem`
+- `useItemProperty`, `useItemProperties`, `useCreateItemProperty`, `useDestroyItemProperty`
+- `useModelProperty`, `useModelProperties`, `useCreateModelProperty`, `useDestroyModelProperty`
+
+Example: create a schema and model in a component, then create and display an item and update its title.
+
+```tsx
+import { useSchema, useCreateModel, useModel, useCreateItem, useItem } from '@seedprotocol/sdk'
+
+function BlogEditor() {
+  const schema = useSchema('Blog')
+  const createModel = useCreateModel()
+  const Post = useModel('Post', 'Blog')
+  const createItem = useCreateItem()
+  const [itemId, setItemId] = useState<string | null>(null)
+  const item = useItem(itemId ?? '')
+
+  useEffect(() => {
+    if (!schema) return
+    createModel?.('Post', schema, {
+      properties: { title: { dataType: 'Text' }, content: { dataType: 'Text' } },
+    })
+  }, [schema])
+
+  const handleCreate = async () => {
+    if (!Post) return
+    const newItem = await Post.create({ title: 'New post', content: '' })
+    setItemId(newItem.seedLocalId ?? newItem.seedUid ?? null)
+  }
+
+  return (
+    <div>
+      <button onClick={handleCreate}>New post</button>
+      {item && (
+        <input
+          value={item.title ?? ''}
+          onChange={(e) => { item.title = e.target.value }}
+        />
+      )}
+    </div>
+  )
+}
+```
+
+---
+
+## Next steps
+
+- [CONFIG_EXAMPLE.md](../CONFIG_EXAMPLE.md) – client configuration and database options
+- [DATA_ACCESS_PATTERNS.md](DATA_ACCESS_PATTERNS.md) – patterns for reading and writing data
+- [SCHEMA_CREATION_FLOW.md](SCHEMA_CREATION_FLOW.md) – how schema and model creation work under the hood
+
+
+This guide walks you through the core workflows: creating a schema with models, creating items from those models, and updating item properties.
+
+## Prerequisites
+
+- Initialize the SDK client before using Schema, Model, or Item APIs. Pass your config (endpoints, `filesDir`, optional `dbConfig`) to `client.init()`. See [CONFIG_EXAMPLE.md](../CONFIG_EXAMPLE.md) for configuration details.
 
 ```typescript
-client.onReady(() => {
-  console.log('Seed Protocol client is ready')
-})
+import { client } from '@seedprotocol/sdk'
 
-client.onError((error) => {
-  console.error('Seed Protocol client error:', error)
+await client.init({
+  config: {
+    endpoints: { /* your EAS endpoint */ },
+    filesDir: '.seed',
+  },
+  addresses: ['0x...'], // optional
 })
-
-client.init({ config })
 ```
 
-## Creating Items
+---
 
-An `Item` is a wrapper class for an instance of a `Model`. Creating items currently looks like this:
+## 1. Create a schema with models
 
-```typescript=
-import {Item,} from '@seedprotocol/sdk'
-import {Post, Image, Identity} from './models'
-import html from './index.html'
+A **schema** is a named container for **models**. Each model defines a set of **properties** (name and data type).
 
-const image = new Item<Image>({
-    src: 'https://imgr.com/image.jpg',
+### Create behavior (wait for ready)
+
+Schema, Model, ModelProperty, Item, and ItemProperty each run a small state machine. Their **`create()`** methods share the same behavior:
+
+- **Default:** `create()` returns a **Promise** that resolves when the entity is **ready** (state machine in the idle state). You should **`await`** the result before using the entity.
+- **Opt-out:** Pass **`{ waitForReady: false }`** as the last argument to get the entity **immediately** (synchronous return). Use this when you manage readiness yourself (e.g. internal loops that call `waitForEntityIdle` later) or when you only need a reference.
+- **Timeout:** When waiting, you can pass **`readyTimeout`** (milliseconds; default `5000`) in the same options object, e.g. `{ readyTimeout: 10000 }`.
+
+So in normal app code you’ll write:
+
+- `await Schema.create('Blog')`
+- `await Model.create('Post', schema, { properties })`
+- `await Item.create({ modelName: 'Post', schemaName: 'Blog', ... })`
+
+and use the returned instance after the promise resolves. Use `{ waitForReady: false }` only when you explicitly want the instance without waiting.
+
+1. Create the schema by name: `await Schema.create('Blog')`.
+2. Add models with `await Model.create(modelName, schema, { properties })`. Property definitions use `dataType` (e.g. `'Text'`, `'Number'`, `'Boolean'`, `'Date'`, `'Json'`, `'Html'`, `'Image'`, `'File'`, `'List'`, `'Relation'`).
+
+**Example: schema with a single model**
+
+```typescript
+import { Schema, Model } from '@seedprotocol/sdk'
+
+// Create a schema. Default: waits until ready.
+const schema = await Schema.create('Blog')
+
+// Add a model with properties. Default: waits until ready.
+const Post = await Model.create('Post', schema, {
+  properties: {
+    title: { dataType: 'Text' },
+    content: { dataType: 'Text' },
+    published: { dataType: 'Boolean' },
+    wordCount: { dataType: 'Number' },
+  },
 })
-
-const author = new Item<Identity>({
-    name: 'Keith Axline',
-    profile: 'Developer for Seed Protocol',
-})
-
-const authors = [
-    author
-]
-
-const post = new Item<Post>({
-    title: 'Some title',
-    summary: 'My summary',
-    featureImage: image,
-    authors,
-})
-
-await post.publish()
-
-// And later when we want to update the post
-post.title = 'Something else'
-
-await post.publish()
 
 ```
 
-Your feedback on how to make this API simpler, cleaner, or more intuitive is very welcome. Please open an issue or PR if you have any suggestions.
+**Example: schema with multiple models**
+
+```typescript
+import { Schema, Model } from '@seedprotocol/sdk'
+
+const schema = await Schema.create('MyApp')
+
+const Article = await Model.create('Article', schema, {
+  properties: {
+    headline: { dataType: 'Text' },
+    body: { dataType: 'Html' },
+    publishedAt: { dataType: 'Date' },
+  },
+})
+
+const Author = await Model.create('Author', schema, {
+  properties: {
+    name: { dataType: 'Text' },
+    bio: { dataType: 'Text' },
+  },
+})
+```
+
+You can also create a model by schema name (string) instead of a schema instance. The schema will be resolved by name:
+
+```typescript
+const Post = await Model.create('Post', 'Blog', {
+  properties: {
+    title: { dataType: 'Text' },
+    content: { dataType: 'Text' },
+  },
+})
+```
+
+---
+
+## 2. Create an item from a model
+
+Once a model exists, create **items** (data records) from it. Each item has a value for each model property. **`Item.create()`** and a model’s **`create()`** (e.g. `Post.create()`) also wait for the item to be ready by default; you can pass **`{ waitForReady: false }`** or **`readyTimeout`** as a second argument to `Item.create()`.
+
+**Using the model’s `create` method (recommended)**
+
+```typescript
+import { Schema, Model } from '@seedprotocol/sdk'
+
+const schema = await Schema.create('Blog')
+const Post = await Model.create('Post', schema, {
+  properties: {
+    title: { dataType: 'Text' },
+    content: { dataType: 'Text' },
+  },
+})
+
+const item = await Post.create({
+  title: 'My first post',
+  content: 'Hello, world!',
+})
+
+console.log(item.seedLocalId)  // item's local id
+console.log(item.title)        // 'My first post'
+console.log(item.content)      // 'Hello, world!'
+```
+
+**Using `Item.create` directly**
+
+You can create an item by passing `modelName` (and optional `schemaName`) plus property values:
+
+```typescript
+import { Item } from '@seedprotocol/sdk'
+
+const item = await Item.create({
+  modelName: 'Post',
+  schemaName: 'Blog',  // optional if you have a single schema
+  title: 'Another post',
+  content: 'Some content here.',
+})
+```
+
+---
+
+## 3. Update properties on an item
+
+Item properties are updated by **assigning to the property on the item**. The SDK syncs these changes to the database.
+
+```typescript
+// Create an item
+const item = await Post.create({
+  title: 'Draft post',
+  content: 'Initial content.',
+})
+
+// Update by assignment
+item.title = 'Updated title'
+item.content = 'Revised content.'
+
+// Read back
+console.log(item.title)   // 'Updated title'
+console.log(item.content) // 'Revised content.'
+```
+
+You can also read and update via the `properties` array (each element has `propertyName` and `value`):
+
+```typescript
+// Find a property and update its value
+const titleProp = item.properties.find((p) => p.propertyName === 'title')
+if (titleProp) {
+  titleProp.value = 'New title'
+}
+console.log(item.title) // 'New title'
+```
+
+---
+
+## Full example
+
+```typescript
+import { client, Schema, Model } from '@seedprotocol/sdk'
+
+async function main() {
+  await client.init({
+    config: {
+      endpoints: { /* your EAS endpoint */ },
+      filesDir: '.seed',
+    },
+  })
+
+  const schema = await Schema.create('Blog')
+  const Post = await Model.create('Post', schema, {
+    properties: {
+      title: { dataType: 'Text' },
+      content: { dataType: 'Text' },
+    },
+  })
+
+  const item = await Post.create({
+    title: 'First post',
+    content: 'Hello!',
+  })
+
+  item.title = 'First post (updated)'
+  item.content = 'Hello, world!'
+
+  console.log(item.seedLocalId, item.title, item.content)
+}
+```
+
+---
+
+## React hooks (browser)
+
+In a React app you can use hooks for schemas, models, items, and item properties. These are exported from the main package:
+
+- `useSchema`, `useSchemas`, `useCreateSchema`, `useDestroySchema`
+- `useModel`, `useModels`, `useCreateModel`, `useDestroyModel`
+- `useItem`, `useItems`, `useCreateItem`, `useDeleteItem`
+- `useItemProperty`, `useItemProperties`, `useCreateItemProperty`, `useDestroyItemProperty`
+- `useModelProperty`, `useModelProperties`, `useCreateModelProperty`, `useDestroyModelProperty`
+
+Example: create a schema and model in a component, then create and display an item and update its title.
+
+```tsx
+import { useSchema, useCreateModel, useModel, useCreateItem, useItem } from '@seedprotocol/sdk'
+
+function BlogEditor() {
+  const schema = useSchema('Blog')
+  const createModel = useCreateModel()
+  const Post = useModel('Post', 'Blog')
+  const createItem = useCreateItem()
+  const [itemId, setItemId] = useState<string | null>(null)
+  const item = useItem(itemId ?? '')
+
+  useEffect(() => {
+    if (!schema) return
+    createModel?.('Post', schema, {
+      properties: { title: { dataType: 'Text' }, content: { dataType: 'Text' } },
+    })
+  }, [schema])
+
+  const handleCreate = async () => {
+    if (!Post) return
+    const newItem = await Post.create({ title: 'New post', content: '' })
+    setItemId(newItem.seedLocalId ?? newItem.seedUid ?? null)
+  }
+
+  return (
+    <div>
+      <button onClick={handleCreate}>New post</button>
+      {item && (
+        <input
+          value={item.title ?? ''}
+          onChange={(e) => { item.title = e.target.value }}
+        />
+      )}
+    </div>
+  )
+}
+```
+
+---
+
+## Next steps
+
+- [CONFIG_EXAMPLE.md](../CONFIG_EXAMPLE.md) – client configuration and database options
+- [DATA_ACCESS_PATTERNS.md](DATA_ACCESS_PATTERNS.md) – patterns for reading and writing data
+- [SCHEMA_CREATION_FLOW.md](SCHEMA_CREATION_FLOW.md) – how schema and model creation work under the hood
